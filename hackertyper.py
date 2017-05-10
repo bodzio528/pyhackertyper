@@ -101,7 +101,7 @@ class HackertyperTest(unittest.TestCase):
         self.assertEqual(summary['collected'], list(zip(self.user_text_2, range(0, 1000, 20))))
 
 
-def print_summary(summary):
+def format_summary(summary):
     errors = summary['errors']
     total = summary['total']
     error_rate = 100.0 * errors / total
@@ -109,14 +109,26 @@ def print_summary(summary):
     start_time = summary['collected'][0][1]
     duration = round((end_time - start_time) / 1000.0, 4)
     if duration != 0:
-        avg_speed = (total - errors) / duration
+        avg_speed = round(60.0 * (total - errors) / duration)
     else:
-        avg_speed = 'infinity'
+        avg_speed = '(infinity)'
 
-    print('Errors {0}({1}%) Avg. Speed {2}'.format(errors, error_rate, avg_speed))
+    return 'Errors {0}({1}%) Avg. Speed {2} CPM'.format(errors, error_rate, avg_speed)
 
+
+class FormatSummaryTest(unittest.TestCase):
+    def test_format_summary(self):
+        summary = {'errors': 1, 'total': 10,
+                   'collected': [('c', 0), ('o', 1000), ('l', 2000), ('l', 3000), ('e', 4000), ('c', 5000), ('t', 6000), ('e', 7000),
+                                 ('d', 8000), ('0', 9000)]}
+        self.assertEqual(format_summary(summary), 'Errors 1(10.0%) Avg. Speed 60 CPM')
+
+    def test_format_summary_infinity_speed(self):
+        summary = {'errors': 0, 'total': 2,
+                   'collected': [('c', 1000), ('o', 1000)]}
+        self.assertEqual(format_summary(summary), 'Errors 0(0.0%) Avg. Speed (infinity) CPM')
 
 if __name__ == '__main__':
     expected_text = 'some text'
     print(expected_text)
-    print_summary(hackertyper(expected_text))
+    print(format_summary(hackertyper(expected_text)))
