@@ -1,8 +1,5 @@
 #! /usr/bin/python3
 
-import unittest
-import unittest.mock
-
 
 def current_timestamp_ms():
     import time
@@ -13,132 +10,50 @@ def collect(char, buffer):
     buffer.append((char, current_timestamp_ms()))
 
 
-class CollectTest(unittest.TestCase):
-    def setUp(self):
-        self.buffer = []
-
-    @unittest.mock.patch('hackertyper.current_timestamp_ms')
-    def test_collect_uses_current_timestamp_ms(self, current_timestamp):
-        current_timestamp.return_value = 0xDEAD
-        collect('c', self.buffer)
-        self.assertIn(('c', 0xDEAD), self.buffer)
-
-
 def validate(char, input_buffer, expected_buffer):
     return char == expected_buffer[len(input_buffer)]
 
 
-class ValidateTest(unittest.TestCase):
-    def test_validate_check_compares_next_expected_char_with_provided(self):
-        input_buffer = []
-        expected_buffer = ['l', 'o']
-        self.assertTrue(validate('l', input_buffer, expected_buffer))
-
-
-def user_input():
-    return 'a'
-
-OK = 0
-ERR = 1
-
-
-def user_output(status, ch):
-    pass
-
-
-def hackertyper(challenge_text):
-    errors = 0
-    input_buffer = []
-    while len(input_buffer) < len(challenge_text):
-        ch = user_input()
-        if not validate(ch, input_buffer, challenge_text):
-            errors += 1
-            user_output(ERR, ch)
-        else:
-            user_output(OK, ch)
-        collect(ch, input_buffer)
-
-    return {'errors': errors, 'total': len(challenge_text), 'collected': input_buffer}
-
-@unittest.mock.patch('hackertyper.user_output')
-@unittest.mock.patch('hackertyper.user_input')
-class HackertyperTest(unittest.TestCase):
-    def setUp(self):
-        self.expected_text = 'some sequence of characters'
-        self.user_text_1 = 'some saquence of characters'
-        self.user_text_2 = 'some saquence of cheracters'
-
-    def test_hackertyper_returns_summary(self, *args):
-        summary = hackertyper('')
-        self.assertIn('errors', summary)
-        self.assertIn('total', summary)
-
-    def test_hackertyper_returns_total_number_of_characters_expected(self, *args):
-        summary = hackertyper('asdf')
-        self.assertEqual(summary['total'], 4)
-
-    def test_no_errors_for_perfectly_matched_input(self, patched_user_input, patcher_user_output):
-        patched_user_input.side_effect = list(self.expected_text)
-        summary = hackertyper(self.expected_text)
-        self.assertEqual(summary['errors'], 0)
-        self.assertEqual(patcher_user_output.call_count, len(self.expected_text))
-        patcher_user_output.assert_called_with(OK, unittest.mock.ANY)
-
-    def test_one_error_for_input_with_one_typo(self, patched_user_input, patcher_user_output):
-        patched_user_input.side_effect = list(self.user_text_1)
-        summary = hackertyper(self.expected_text)
-        self.assertEqual(summary['errors'], 1)
-        patcher_user_output.assert_any_call(ERR, 'a')
-        patcher_user_output.assert_called_with(OK, unittest.mock.ANY)
-
-    def test_one_error_for_input_with_two_typos(self, patched_user_input, unused):
-        patched_user_input.side_effect = list(self.user_text_2)
-        summary = hackertyper(self.expected_text)
-        self.assertEqual(summary['errors'], 2)
-
-    @unittest.mock.patch('hackertyper.current_timestamp_ms')
-    def test_hackertyper_returns_collected_data(self, patched_current_timestamp, patched_user_input, unused):
-        patched_user_input.side_effect = list(self.user_text_2)
-        patched_current_timestamp.return_value = 0
-        summary = hackertyper(self.expected_text)
-        self.assertEqual(summary['collected'], list(zip(self.user_text_2, [0] * len(self.user_text_2))))
-
-    @unittest.mock.patch('hackertyper.current_timestamp_ms')
-    def test_hackertyper_returns_collected_data_timestamp_progress(self, patched_current_timestamp, patched_user_input, unused):
-        patched_user_input.side_effect = list(self.user_text_2)
-        patched_current_timestamp.side_effect = range(0, 1000, 20)
-        summary = hackertyper(self.expected_text)
-        self.assertEqual(summary['collected'], list(zip(self.user_text_2, range(0, 1000, 20))))
-
-
 def format_summary(summary):
     errors = summary['errors']
-    total = summary['total']
-    error_rate = 100.0 * errors / total
+    collected_len = len(summary['collected'])
+    error_rate = round(100.0 * errors / collected_len, 1)
     end_time = summary['collected'][-1][1]
     start_time = summary['collected'][0][1]
     duration = round((end_time - start_time) / 1000.0, 4)
     if duration != 0:
-        avg_speed = round(60.0 * (total - errors) / duration)
+        avg_speed = round(60.0 * (collected_len - errors) / duration)
     else:
         avg_speed = '(infinity)'
 
     return '\nErrors {0}({1}%) Avg. Speed {2} CPM'.format(errors, error_rate, avg_speed)
 
 
-class FormatSummaryTest(unittest.TestCase):
-    def test_format_summary(self):
-        summary = {'errors': 1, 'total': 10,
-                   'collected': [('c', 0), ('o', 1000), ('l', 2000), ('l', 3000), ('e', 4000), ('c', 5000),
-                                 ('t', 6000), ('e', 7000), ('d', 8000), ('0', 9000)]}
-        self.assertEqual(format_summary(summary), '\nErrors 1(10.0%) Avg. Speed 60 CPM')
+class Hackertyper(object):
+    OK = 0
+    ERR = 1
 
-    def test_format_summary_infinity_speed(self):
-        summary = {'errors': 0, 'total': 2,
-                   'collected': [('c', 1000), ('o', 1000)]}
-        self.assertEqual(format_summary(summary), '\nErrors 0(0.0%) Avg. Speed (infinity) CPM')
+    def __init__(self, challenge_text, user_output):
+        self.challenge_text = challenge_text
+        self.user_output = user_output
+        self.errors = 0
+        self.input_buffer = []
+
+    def key(self, user_input):
+        if len(self.input_buffer) < len(self.challenge_text):
+            if not validate(user_input, self.input_buffer, self.challenge_text):
+                self.errors += 1
+                self.user_output(Hackertyper.ERR, user_input)
+            else:
+                self.user_output(Hackertyper.OK, user_input)
+        collect(user_input, self.input_buffer)
+
+    def summary(self):
+        return {'errors': self.errors, 'total': len(self.challenge_text), 'collected': self.input_buffer}
+
 
 if __name__ == '__main__':
-    expected_text = 'one line of text to prepare some challenge'
-    print(expected_text)
-    print(format_summary(hackertyper(expected_text)))
+    # if --gui then start PyQt5 gui
+    import sys
+    import gui
+    sys.exit(gui.app.exec_())
